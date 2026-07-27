@@ -1,0 +1,34 @@
+{
+  "fixture_version": 1,
+  "note": "Snapshot of the candidate state machine. Adding an edge is a behaviour change.",
+  "transitions": {
+    "cancelled": [],
+    "completed": [],
+    "failed": [],
+    "proposed": [
+      "cancelled",
+      "failed",
+      "pruned",
+      "validated"
+    ],
+    "pruned": [],
+    "queued": [
+      "cancelled",
+      "failed",
+      "pruned",
+      "running"
+    ],
+    "running": [
+      "cancelled",
+      "completed",
+      "failed",
+      "pruned",
+      "queued"
+    ],
+    "validated": [
+      "cancelled",
+      "pruned",
+      "queued"
+    ]
+  }
+}
