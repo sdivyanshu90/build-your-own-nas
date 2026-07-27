@@ -1,0 +1,36 @@
+{
+  "fixture_version": 1,
+  "note": "Sections every generated Markdown report must contain, in order.",
+  "required_csv_columns": [
+    "rank",
+    "candidate_id",
+    "architecture_hash",
+    "score",
+    "pareto_rank",
+    "on_pareto_front",
+    "feasible",
+    "violations"
+  ],
+  "required_json_keys": [
+    "search",
+    "configuration",
+    "environment",
+    "counts",
+    "ranking",
+    "plots",
+    "limitations",
+    "generated_at"
+  ],
+  "required_sections": [
+    "# Search report:",
+    "## Headline",
+    "## Search statistics",
+    "## Configuration",
+    "## Environment",
+    "## Leaderboard",
+    "## Pareto front",
+    "## Best architecture",
+    "## Figures",
+    "## Known limitations"
+  ]
+}
