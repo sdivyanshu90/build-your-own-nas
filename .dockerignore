@@ -1,0 +1,56 @@
+# Everything the image does not need. A smaller build context means faster builds and
+# fewer spurious cache invalidations — a change to a test file should not rebuild the
+# dependency layer.
+
+# Version control
+.git/
+.gitignore
+.github/
+
+# Python caches and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Tests, docs, and examples: the runtime image installs a wheel and runs searches. Keeping
+# them out cuts the context substantially. CI tests the source tree directly.
+tests/
+docs/
+examples/
+
+# Project outputs and datasets
+artifacts/
+data/
+datasets/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+benchmark-results.json
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+
+# Compose and local development files, which are not used inside the image
+docker-compose.yml
+Makefile
+.pre-commit-config.yaml
