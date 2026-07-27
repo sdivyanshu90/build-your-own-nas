@@ -1,0 +1,125 @@
+{
+  "cases": [
+    {
+      "front": [
+        "a"
+      ],
+      "name": "single_point",
+      "vectors": {
+        "a": [
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "front": [
+        "a"
+      ],
+      "name": "one_dominates",
+      "vectors": {
+        "a": [
+          1.0,
+          1.0
+        ],
+        "b": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "front": [
+        "a",
+        "b"
+      ],
+      "name": "incomparable",
+      "vectors": {
+        "a": [
+          1.0,
+          0.0
+        ],
+        "b": [
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "front": [
+        "a",
+        "b"
+      ],
+      "name": "duplicates_all_survive",
+      "vectors": {
+        "a": [
+          1.0,
+          1.0
+        ],
+        "b": [
+          1.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "front": [
+        "a",
+        "b",
+        "c"
+      ],
+      "name": "knee_point",
+      "vectors": {
+        "a": [
+          1.0,
+          0.0
+        ],
+        "b": [
+          0.5,
+          0.5
+        ],
+        "c": [
+          0.0,
+          1.0
+        ],
+        "d": [
+          0.4,
+          0.4
+        ]
+      }
+    },
+    {
+      "front": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "name": "three_objectives",
+      "vectors": {
+        "a": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "b": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "c": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "d": [
+          0.1,
+          0.1,
+          0.1
+        ]
+      }
+    }
+  ],
+  "fixture_version": 1,
+  "note": "Hand-checked Pareto cases. Vectors are in maximisation form."
+}
