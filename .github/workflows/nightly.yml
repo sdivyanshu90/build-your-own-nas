@@ -1,0 +1,157 @@
+# Scheduled deeper checks.
+#
+# The main CI workflow is tuned to finish in a few minutes on every push. This one runs
+# once a day and spends longer: the slow end-to-end searches, the multiprocessing path,
+# an expanded Hypothesis profile, the performance guards, and a container build.
+#
+# Failures here are informative rather than blocking — nothing merges on this workflow —
+# so it uses `fail-fast: false` and reports every job's outcome.
+
+name: Nightly
+
+on:
+  schedule:
+    # 03:17 UTC: off the hour, so it does not contend with everyone else's cron.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      hypothesis_scale:
+        description: "Multiplier for property-test example budgets"
+        required: false
+        default: "8"
+
+permissions:
+  contents: read
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  OMP_NUM_THREADS: "2"
+  MKL_NUM_THREADS: "2"
+
+jobs:
+  slow-tests:
+    name: Slow end-to-end searches
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -e ".[dev]"
+
+      - name: Every test, including the slow ones
+        run: python -m pytest -m "" -q --durations=20
+
+      - name: Multiprocessing end-to-end
+        # Exercised separately so a failure is attributable: this is the only path that
+        # spawns real worker processes.
+        run: python -m pytest tests/end_to_end -m slow -q -k multiprocessing
+
+  expanded-properties:
+    name: Expanded property-based testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -e ".[dev]"
+
+      - name: Run Hypothesis with a much larger example budget
+        env:
+          # tests/profiles.py multiplies every property's example count by this factor.
+          HYPOTHESIS_SCALE: ${{ github.event.inputs.hypothesis_scale || '8' }}
+        run: python -m pytest tests/property -q --durations=15
+
+      - name: Upload the Hypothesis example database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hypothesis-examples
+          path: .hypothesis
+          retention-days: 14
+          if-no-files-found: ignore
+
+  performance:
+    name: Performance guards and benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -e ".[dev]"
+
+      - name: Performance guards
+        run: python -m pytest tests/performance -q
+
+      - name: Benchmarks
+        # Numbers from a shared runner are noisy and are recorded for trend-watching only;
+        # nothing asserts on them.
+        run: python scripts/benchmark.py --repeats 50 --json benchmark-results.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
+          retention-days: 30
+
+  container:
+    name: Container build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: nas-engine:nightly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Diagnostics inside the container
+        run: docker run --rm nas-engine:nightly doctor
+
+      - name: Smoke search inside the container
+        run: docker run --rm nas-engine:nightly smoke
+
+      - name: Confirm the container does not run as root
+        run: |
+          user=$(docker run --rm --entrypoint id nas-engine:nightly -un)
+          echo "container user: $user"
+          test "$user" != "root"
