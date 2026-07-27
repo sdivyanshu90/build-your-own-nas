@@ -1,0 +1,107 @@
+# Pre-commit hooks.
+#
+# These run the same checks CI runs, but only on the files you touched, so the feedback
+# loop is seconds rather than minutes. Install them once:
+#
+#     make hooks          # or: pre-commit install
+#
+# Run them across the whole repository at any time:
+#
+#     pre-commit run --all-files
+#
+# The heavy checks (the full test suite, the smoke search, the container build) are
+# deliberately *not* hooks: a commit should not take minutes. CI covers them.
+
+default_language_version:
+  python: python3
+
+repos:
+  # ------------------------------------------------------------------ hygiene --
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$  # Markdown uses trailing spaces for hard line breaks
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        # Weights and databases belong in artifacts/, which is git-ignored. A large file
+        # in a commit is almost always an accident.
+        args: [--maxkb=512]
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  # -------------------------------------------------------------------- format --
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.2
+    hooks:
+      - id: ruff-format
+        types_or: [python, pyi]
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+
+  # ---------------------------------------------------------------------- types --
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        # mypy needs the real dependencies to check anything useful; without them every
+        # third-party symbol degrades to `Any` and the strict flags become decorative.
+        additional_dependencies:
+          - pydantic>=2.7
+          - types-PyYAML>=6.0
+          - sqlalchemy>=2.0
+        args: [--config-file=pyproject.toml]
+        # The hook installs its own environment, which cannot hold torch. Restricting it
+        # to the pure-data modules keeps it fast and meaningful; `make typecheck` and CI
+        # check everything.
+        files: ^src/nas_engine/(architectures|objectives|utilities|search_space)/
+
+  # ------------------------------------------------------------------ project --
+  - repo: local
+    hooks:
+      - id: docs-links
+        name: documentation links and anchors resolve
+        entry: python scripts/check_docs_links.py
+        language: system
+        pass_filenames: false
+        files: \.md$
+
+      - id: docs-tables
+        name: documentation tables are well-formed and aligned
+        entry: python scripts/check_tables.py
+        language: system
+        pass_filenames: false
+        files: \.md$
+
+      - id: docs-manifest
+        name: the repository manifest is up to date
+        entry: python scripts/generate_manifest.py --check
+        language: system
+        pass_filenames: false
+        files: ^(src/nas_engine/|tests/|docs/repository-manifest\.md)
+
+      - id: config-validation
+        name: shipped configurations are valid
+        entry: bash -c 'for f in configs/*.yaml; do nas-engine validate-config --config "$f" >/dev/null || exit 1; done'
+        language: system
+        pass_filenames: false
+        files: ^configs/.*\.yaml$
+
+      - id: fast-tests
+        name: unit tests
+        entry: python -m pytest tests/unit -q --no-header
+        language: system
+        pass_filenames: false
+        # Only when source or unit tests change: a documentation-only commit should not
+        # wait for the test suite.
+        files: ^(src/|tests/unit/)
+        stages: [pre-commit]
