@@ -1,0 +1,155 @@
+{
+  "architecture_schema_version": 1,
+  "cases": [
+    {
+      "architecture": {
+        "head": {
+          "activation": "relu",
+          "dropout": 0.1,
+          "hidden_units": 64,
+          "pooling": "avg"
+        },
+        "input_channels": 3,
+        "input_size": 32,
+        "num_classes": 10,
+        "schema_version": 1,
+        "stages": [
+          {
+            "blocks": [
+              {
+                "activation": "relu",
+                "expansion_ratio": 1.0,
+                "kernel_size": 3,
+                "normalization": "batch",
+                "operation": "conv",
+                "out_channels": 32,
+                "stride": 2,
+                "use_residual": false
+              },
+              {
+                "activation": "silu",
+                "expansion_ratio": 2.0,
+                "kernel_size": 5,
+                "normalization": "batch",
+                "operation": "dw_sep_conv",
+                "out_channels": 32,
+                "stride": 1,
+                "use_residual": true
+              }
+            ]
+          },
+          {
+            "blocks": [
+              {
+                "activation": "relu",
+                "expansion_ratio": 1.0,
+                "kernel_size": 3,
+                "normalization": "group",
+                "operation": "conv",
+                "out_channels": 64,
+                "stride": 2,
+                "use_residual": false
+              },
+              {
+                "activation": "identity",
+                "expansion_ratio": 1.0,
+                "kernel_size": 3,
+                "normalization": "none",
+                "operation": "max_pool",
+                "out_channels": 64,
+                "stride": 1,
+                "use_residual": false
+              },
+              {
+                "activation": "identity",
+                "expansion_ratio": 1.0,
+                "kernel_size": 1,
+                "normalization": "none",
+                "operation": "identity",
+                "out_channels": 64,
+                "stride": 1,
+                "use_residual": false
+              }
+            ]
+          }
+        ],
+        "stem": {
+          "activation": "relu",
+          "kernel_size": 3,
+          "normalization": "batch",
+          "out_channels": 16,
+          "stride": 1
+        }
+      },
+      "expected_hash": "115a351b4fbd0bbb734a429924187e43",
+      "expected_multiply_accumulates": 4264576,
+      "expected_non_trainable_parameters": 421,
+      "expected_output_shape": [
+        2,
+        10
+      ],
+      "expected_total_stride": 4,
+      "expected_trainable_parameters": 34522,
+      "name": "reference_cnn"
+    },
+    {
+      "architecture": {
+        "head": {
+          "activation": "identity",
+          "dropout": 0.0,
+          "hidden_units": 0,
+          "pooling": "max"
+        },
+        "input_channels": 3,
+        "input_size": 16,
+        "num_classes": 4,
+        "schema_version": 1,
+        "stages": [
+          {
+            "blocks": [
+              {
+                "activation": "identity",
+                "expansion_ratio": 1.0,
+                "kernel_size": 3,
+                "normalization": "none",
+                "operation": "avg_pool",
+                "out_channels": 8,
+                "stride": 2,
+                "use_residual": false
+              },
+              {
+                "activation": "relu",
+                "expansion_ratio": 1.0,
+                "kernel_size": 1,
+                "normalization": "batch",
+                "operation": "conv",
+                "out_channels": 16,
+                "stride": 1,
+                "use_residual": false
+              }
+            ]
+          }
+        ],
+        "stem": {
+          "activation": "relu",
+          "kernel_size": 3,
+          "normalization": "batch",
+          "out_channels": 8,
+          "stride": 1
+        }
+      },
+      "expected_hash": "f147517d4faad3466ed6071d72b53737",
+      "expected_multiply_accumulates": 63552,
+      "expected_non_trainable_parameters": 50,
+      "expected_output_shape": [
+        2,
+        4
+      ],
+      "expected_total_stride": 2,
+      "expected_trainable_parameters": 460,
+      "name": "pooling_first"
+    }
+  ],
+  "fixture_version": 1,
+  "note": "Golden values captured deliberately. A change here means the canonical form, the hash function, or the model builder changed, which invalidates every stored architecture hash. Bump fixture_version and record why in the changelog."
+}
