@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.cache/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------------
+# Project outputs
+# ---------------------------------------------------------------------------------
+# Search results: SQLite databases, candidate weights, training checkpoints, reports,
+# and plots. These are reproducible from a configuration and a seed, and they get large
+# quickly, so they are never committed. `artifacts/.gitkeep` preserves the directory.
+artifacts/*
+!artifacts/.gitkeep
+
+# Datasets. CIFAR-10 alone is ~170 MB.
+data/
+datasets/
+
+# Benchmark output
+benchmark-results.json
+
+# Log files
+*.log
+logs/
