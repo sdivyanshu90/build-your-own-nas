@@ -1,0 +1,93 @@
+# Smoke test: the smallest configuration that exercises the whole pipeline.
+#
+# Runs in a few seconds on one CPU core, needs no network access, and is what
+# `make smoke` and the CI end-to-end job use. Every value here is chosen to be fast, not
+# to produce a good architecture.
+version: 1
+
+project:
+  name: smoke_test
+  description: Minimal end-to-end run used by CI and by `make smoke`.
+  output_dir: artifacts/smoke
+
+dataset:
+  provider: synthetic
+  batch_size: 32
+  num_workers: 0
+  options:
+    num_classes: 4
+    input_channels: 3
+    input_size: 16
+    train_samples: 192
+    validation_samples: 96
+    test_samples: 96
+    noise_scale: 0.6
+    seed: 42
+
+search_space:
+  preset: tiny_cnn
+
+algorithm:
+  name: random_search
+  params:
+    sample_attempts: 100
+
+budget:
+  max_evaluations: 4
+  epochs: 1
+  max_seconds_per_evaluation: 120
+
+training:
+  optimizer:
+    name: adamw
+    learning_rate: 0.003
+    weight_decay: 0.0001
+  scheduler:
+    name: cosine
+  gradient_clip_norm: 5.0
+  topk: 2
+
+evaluation:
+  measure_latency: true
+  latency_warmup_iterations: 2
+  latency_timed_iterations: 3
+  latency_repeats: 2
+  save_weights: true
+
+objectives:
+  objectives:
+    - metric: validation_accuracy
+      direction: maximize
+      weight: 1.0
+      normalization: minmax
+    - metric: trainable_parameters
+      direction: minimize
+      weight: 0.2
+      normalization: log
+  constraints: []
+
+persistence:
+  database_path: nas.db
+  artifact_dir: candidates
+  report_dir: reports
+  checkpoint_every: 1
+  keep_checkpoints: 3
+
+logging:
+  level: INFO
+  format: console
+
+hardware:
+  device: cpu
+
+concurrency:
+  mode: sequential
+  workers: 1
+
+reproducibility:
+  seed: 42
+  deterministic: true
+  warn_only: true
+
+retry:
+  max_retries: 1
