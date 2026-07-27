@@ -1,0 +1,96 @@
+# Compose definitions for running searches in a container.
+#
+#   docker compose run --rm smoke          # the end-to-end smoke search
+#   docker compose run --rm doctor         # environment diagnostics
+#   docker compose run --rm search         # a full random search
+#   docker compose run --rm shell          # an interactive shell
+#
+# Every service mounts ./artifacts, so the database, weights, and reports survive the
+# container. The image is CPU-only by default; see the `search-gpu` service and the notes
+# at the bottom of the Dockerfile for CUDA.
+
+services:
+  # ---------------------------------------------------------------- base definition --
+  # An anchor rather than a service, so `docker compose up` does not start anything by
+  # accident. Each real service extends it.
+  x-common: &common
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nas-engine:latest
+    working_dir: /app
+    volumes:
+      # Results: the database, candidate weights, and reports.
+      - ./artifacts:/data/artifacts
+      # Datasets: mounted read-only. Nothing in a search should ever write here.
+      - ./data:/data/datasets:ro
+      # Configuration: mounted so a config can be edited without rebuilding the image.
+      - ./configs:/app/configs:ro
+    environment:
+      # Configuration precedence puts environment variables above the YAML file, so these
+      # redirect output into the mounted volume without editing anything.
+      NAS_ENGINE__PROJECT__OUTPUT_DIR: /data/artifacts
+      NAS_ENGINE__LOGGING__FORMAT: json
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    # A container that runs untrusted configuration should not be able to escalate.
+    security_opt:
+      - no-new-privileges:true
+    init: true
+
+  # ------------------------------------------------------------------------ services --
+  doctor:
+    <<: *common
+    command: ["doctor", "--config", "/app/configs/smoke_test.yaml"]
+
+  smoke:
+    <<: *common
+    command: ["smoke", "/data/artifacts/smoke"]
+
+  search:
+    <<: *common
+    command: ["search", "--config", "/app/configs/random_search.yaml", "--report"]
+    deploy:
+      resources:
+        limits:
+          # A bound on resource consumption: a misconfigured search space can otherwise
+          # propose architectures large enough to exhaust host memory.
+          cpus: "4.0"
+          memory: 8G
+
+  evolution:
+    <<: *common
+    command: ["search", "--config", "/app/configs/evolution.yaml", "--report"]
+
+  resume:
+    <<: *common
+    command: ["resume", "--config", "/app/configs/evolution.yaml"]
+
+  report:
+    <<: *common
+    command: ["report", "--config", "/app/configs/random_search.yaml"]
+
+  shell:
+    <<: *common
+    command: ["bash"]
+    stdin_open: true
+    tty: true
+
+  # GPU execution. Requires the NVIDIA Container Toolkit on the host and an image built
+  # with the CUDA base described in the Dockerfile.
+  search-gpu:
+    <<: *common
+    image: nas-engine:cuda
+    command:
+      - "search"
+      - "--config"
+      - "/app/configs/random_search.yaml"
+      - "--set"
+      - "hardware.device=cuda"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
