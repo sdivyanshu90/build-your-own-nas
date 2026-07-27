@@ -1,0 +1,227 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nas-engine"
+version = "0.1.0"
+description = "Neural Architecture Search from scratch: search spaces, strategies, evaluation, and reporting."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "nas-engine contributors" }]
+keywords = ["neural-architecture-search", "nas", "automl", "pytorch", "deep-learning"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
+
+dependencies = [
+  "torch>=2.1",
+  "numpy>=1.24",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.2",
+  "PyYAML>=6.0",
+  "typer>=0.12",
+  "rich>=13.0",
+  "SQLAlchemy>=2.0",
+  "matplotlib>=3.7",
+  "structlog>=24.1",
+]
+
+[project.optional-dependencies]
+cifar = ["torchvision>=0.16"]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "hypothesis>=6.100",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "types-PyYAML>=6.0",
+  "build>=1.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/example/neural-architecture-search"
+Documentation = "https://github.com/example/neural-architecture-search/tree/main/docs"
+Issues = "https://github.com/example/neural-architecture-search/issues"
+
+[project.scripts]
+nas-engine = "nas_engine.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nas_engine = ["py.typed"]
+
+# --------------------------------------------------------------------------------------
+# Ruff: linting + formatting
+# --------------------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes
+  "I",    # isort
+  "B",    # flake8-bugbear
+  "C4",   # flake8-comprehensions
+  "UP",   # pyupgrade
+  "ANN",  # flake8-annotations
+  "S",    # flake8-bandit (security)
+  "A",    # flake8-builtins
+  "RET",  # flake8-return
+  "SIM",  # flake8-simplify
+  "PTH",  # flake8-use-pathlib
+  "PL",   # pylint
+  "RUF",  # ruff-specific
+  "TID",  # flake8-tidy-imports (bans relative-parent + wildcard patterns)
+  "D",    # pydocstyle
+]
+ignore = [
+  "D203",    # conflicts with D211 (blank line before class docstring)
+  "D213",    # conflicts with D212 (multi-line summary position)
+  "D107",    # __init__ arguments are documented on the class, per the Google convention
+  "ANN401",  # allow `Any` in a small number of deliberately generic boundaries
+  "PLR0913", # explicit keyword-heavy constructors are intentional in config objects
+  "S101",    # `assert` is used for internal invariants; tests re-enable this anyway
+  "UP038",   # deprecated rule; `isinstance(x, (A, B))` remains the clearer spelling
+  # Validation bounds read better as literals sitting next to the error message that
+  # quotes them ("must be >= 2, received 1"); naming each one would separate the two.
+  "PLR2004",
+  # Imports inside functions are used deliberately and only for three reasons, each
+  # documented at the call site: breaking an import cycle, deferring an expensive import
+  # (torch) so `--help` stays fast, and probing an optional dependency.
+  "PLC0415",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+  "D100", "D101", "D102", "D103", "D104",  # test names and docstrings carry the intent
+  "S101",     # assertions are the point
+  "PLR2004",  # literal expected values are clearer than named constants in a test
+  "ANN401",
+  "S311",     # tests exercise the reproducible (non-cryptographic) generators directly
+  "S106",     # fake credentials appear in redaction tests
+  "SLF001",   # a few tests deliberately inspect private state; each is commented
+]
+"examples/**" = ["D100", "D103", "T201"]
+"scripts/**" = ["D100", "D103", "T201"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["nas_engine"]
+
+# --------------------------------------------------------------------------------------
+# mypy: strict typing
+# --------------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+warn_unused_ignores = true
+disallow_any_generics = true
+no_implicit_reexport = true
+show_error_codes = true
+pretty = true
+files = ["src/nas_engine", "tests", "examples", "scripts"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+  "torch.*",
+  "torchvision.*",
+  "matplotlib.*",
+  "mpl_toolkits.*",
+  "numpy.*",
+  "structlog.*",
+  "yaml.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Test bodies stay strict, but Hypothesis decorators erase precise types.
+disallow_untyped_decorators = false
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# --------------------------------------------------------------------------------------
+# pytest
+# --------------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+  "-ra",
+  "--strict-markers",
+  "--strict-config",
+  "--import-mode=importlib",
+  "-m", "not slow",
+]
+markers = [
+  "unit: fast isolated tests of a single unit",
+  "property: Hypothesis property-based tests",
+  "integration: tests spanning several components",
+  "e2e: full end-to-end searches",
+  "regression: golden-fixture regression tests",
+  "performance: coarse timing guards (environment sensitive)",
+  "recovery: failure and recovery behaviour",
+  "determinism: reproducibility guarantees",
+  "slow: excluded from the default run; enable with `-m slow` or `-m ''`",
+]
+filterwarnings = [
+  "error::DeprecationWarning:nas_engine.*",
+]
+
+# --------------------------------------------------------------------------------------
+# coverage
+# --------------------------------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["nas_engine"]
+parallel = true
+omit = ["*/__main__.py"]
+
+[tool.coverage.paths]
+source = ["src/nas_engine", "*/site-packages/nas_engine"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 2
+# With `branch = true` this threshold covers statements and branches together. The
+# project's stated targets are 90% line and 85% branch; the combined figure sits between
+# them, so 90 enforces both in practice. `make coverage` prints the separate numbers.
+fail_under = 90
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@overload",
+  "if __name__ == .__main__.:",
+]
