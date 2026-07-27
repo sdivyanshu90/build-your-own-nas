@@ -1,0 +1,214 @@
+# Continuous integration.
+#
+# Runs on every push and pull request. CPU-only, no network access beyond installing
+# dependencies, no secrets. The whole workflow finishes in a few minutes.
+#
+# Job layout:
+#   quality  - formatting, linting, strict typing. Fast; fails first on style problems.
+#   test     - the suite across the supported Python versions, with coverage on 3.12.
+#   smoke    - a real end-to-end search through the CLI.
+#   package  - build the wheel and install it into a clean environment.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  # Deterministic reductions and predictable timings on shared CI runners.
+  OMP_NUM_THREADS: "2"
+  MKL_NUM_THREADS: "2"
+  PYTHONHASHSEED: "0"
+
+jobs:
+  quality:
+    name: Format, lint, types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # Keyed on pyproject.toml, so the cache invalidates when dependencies change.
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -e ".[dev]"
+
+      - name: Ruff format check
+        run: python -m ruff format --check src/nas_engine tests examples scripts
+
+      - name: Ruff lint
+        run: python -m ruff check src/nas_engine tests examples scripts
+
+      - name: mypy (strict)
+        run: python -m mypy
+
+      - name: Documentation links and anchors
+        run: python scripts/check_docs_links.py
+
+      - name: Documentation tables
+        run: python scripts/check_tables.py
+
+      - name: Repository manifest is current
+        run: python scripts/generate_manifest.py --check
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -e ".[dev]"
+
+      - name: Unit tests
+        run: python -m pytest tests/unit -q
+
+      - name: Property-based tests
+        run: python -m pytest tests/property -q
+
+      - name: Integration tests
+        run: python -m pytest tests/integration -q
+
+      - name: Failure and recovery tests
+        run: python -m pytest tests/failure_recovery -q
+
+      - name: Regression and determinism tests
+        run: python -m pytest tests/regression -q
+
+      - name: End-to-end tests
+        run: python -m pytest tests/end_to_end -q
+
+      - name: Coverage
+        # One version carries the coverage gate: running it on every version would triple
+        # the cost for an identical result.
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m pytest --cov=nas_engine --cov-report=term-missing --cov-report=xml
+          python scripts/check_coverage.py
+
+      - name: Upload coverage report
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 7
+
+  smoke:
+    name: CPU smoke search
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -e ".[dev]"
+
+      - name: Diagnostics
+        run: nas-engine doctor --config configs/smoke_test.yaml
+
+      - name: Validate every shipped configuration
+        run: |
+          for config in configs/*.yaml; do
+            echo "== $config"
+            nas-engine validate-config --config "$config"
+          done
+
+      - name: Smoke search
+        run: scripts/run_smoke_search.sh artifacts/ci-smoke
+
+      - name: Examples
+        run: |
+          python examples/quickstart.py
+          python examples/custom_search_space.py
+          python examples/custom_objective.py
+          python examples/resume_search.py
+
+      - name: Upload the generated report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: artifacts/ci-smoke/reports
+          retention-days: 7
+          if-no-files-found: warn
+
+  package:
+    name: Build and install the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Install the wheel into a clean environment
+        # A fresh virtualenv, not the build environment: this catches a missing runtime
+        # dependency or a package-data omission that an editable install would hide.
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install --upgrade pip
+          /tmp/clean/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch
+          /tmp/clean/bin/pip install dist/*.whl
+          /tmp/clean/bin/nas-engine --help
+          /tmp/clean/bin/nas-engine doctor --set project.output_dir=/tmp/clean-artifacts
+          /tmp/clean/bin/python -c "import nas_engine; print(nas_engine.__version__)"
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+          retention-days: 14
