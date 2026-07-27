@@ -1,0 +1,131 @@
+# Random search over the default CNN space.
+#
+# Random search is the baseline every other strategy must beat. Run this first: if a
+# fancier strategy does not clearly beat it at the same total compute, the extra
+# machinery is not earning its keep.
+#
+#   nas-engine validate-config --config configs/random_search.yaml
+#   nas-engine search --config configs/random_search.yaml --report
+#
+# Switch to CIFAR-10 by replacing the dataset block with the commented one below and
+# installing the optional extra: pip install 'nas-engine[cifar]'
+version: 1
+
+project:
+  name: random_search_cifar_like
+  description: Random-search baseline over the default CNN space at 32x32 resolution.
+  output_dir: artifacts/random_search
+
+dataset:
+  provider: synthetic
+  batch_size: 64
+  num_workers: 0
+  options:
+    num_classes: 10
+    input_channels: 3
+    input_size: 32
+    train_samples: 4096
+    validation_samples: 1024
+    test_samples: 1024
+    noise_scale: 0.8
+    seed: 42
+
+# Real CIFAR-10 (needs torchvision and a one-off ~170 MB download):
+#
+# dataset:
+#   provider: cifar10
+#   batch_size: 128
+#   num_workers: 4
+#   options:
+#     root: data/cifar10
+#     download: true
+#     validation_samples: 5000
+#     augment: true
+#     seed: 42
+
+search_space:
+  preset: default_cnn
+
+algorithm:
+  name: random_search
+  params:
+    sample_attempts: 200
+    max_consecutive_exhaustions: 3
+
+budget:
+  max_evaluations: 20
+  epochs: 5
+  max_seconds_per_evaluation: 900
+
+training:
+  optimizer:
+    name: adamw
+    learning_rate: 0.002
+    weight_decay: 0.0001
+  scheduler:
+    name: cosine
+    warmup_steps: 20
+    min_lr_factor: 0.01
+  gradient_clip_norm: 5.0
+  label_smoothing: 0.05
+  early_stopping_patience: 0
+  topk: 5
+  zero_init_residual: true
+
+evaluation:
+  measure_latency: true
+  latency_batch_size: 1
+  latency_warmup_iterations: 3
+  latency_timed_iterations: 10
+  latency_repeats: 5
+  save_weights: true
+  max_parameters: 2000000
+
+objectives:
+  objectives:
+    - metric: validation_accuracy
+      direction: maximize
+      weight: 1.0
+      normalization: minmax
+    - metric: trainable_parameters
+      direction: minimize
+      weight: 0.2
+      normalization: log
+    - metric: latency_median_ms
+      direction: minimize
+      weight: 0.1
+      normalization: minmax
+      required: false
+      missing_value: .inf
+  constraints:
+    - metric: trainable_parameters
+      operator: le
+      threshold: 2000000
+
+persistence:
+  database_path: nas.db
+  artifact_dir: candidates
+  report_dir: reports
+  checkpoint_every: 1
+  keep_checkpoints: 5
+
+logging:
+  level: INFO
+  format: console
+
+hardware:
+  device: auto
+
+concurrency:
+  mode: sequential
+  workers: 1
+
+reproducibility:
+  seed: 42
+  deterministic: true
+  warn_only: true
+
+retry:
+  max_retries: 1
+  retry_on_timeout: true
+  retry_on_resource_error: true
